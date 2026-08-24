@@ -277,7 +277,7 @@ function processRow(row){
 
 // ---- 두 번째 데이터 소스: [공식몰]이벤트_매거진_브랜드 관리.csv (디자인 담당 이윤경/정아인 건만 포함) ----
 const EVENT_COL = { id:0, status:1, service:2, title:6, planOwner:14, regDate:15, planDue:16,
-  designOwners:[19,20,21], designDue:22, designDoneDate:23, pubOwner:26, pubDue:27, pubDoneDate:28,
+  designOwners:[21], designDue:22, designDoneDate:23, pubOwner:26, pubDue:27, pubDoneDate:28, // V열만 디자인 담당자로 인정
   devOwners:[31,32,33,34], devDue:35, devDoneDate:36 };
 const EVENT_DONE_STATUSES = new Set(['반영/완료']);
 const EVENT_HOLD_STATUS = '미진행';
@@ -328,7 +328,7 @@ function processEventRow(row){
 
   return {
     id:'EVT-'+row[EVENT_COL.id], docNo:'EVT-'+row[EVENT_COL.id], status, service: EVENT_SERVICE_MAP[row[EVENT_COL.service]]||row[EVENT_COL.service]||'미지정',
-    title:(row[EVENT_COL.title]||'(제목없음)').trim(), dept:'', priority:'미지정',
+    title:(row[EVENT_COL.title]||'(제목없음)').trim(), dept:'', priority:'최상', // 이 시트는 우선순위 컬럼이 없어 전부 최상으로 고정
     reqDate, regDate, scheduledDate:null, completedDate, currentOwner: currentOwner||'미배정', currentStage: currentStage||'-',
     currentDue: targetDue, overdue, isDone, uiStatus, startDate: reqDate || regDate, endDate,
     designOwners, allOwners, source:'event'
@@ -337,7 +337,7 @@ function processEventRow(row){
 
 // ---- 세 번째 데이터 소스: [엠디스픽] 상품 상세 제작 의뢰 (구글시트) ----
 const MDPICK_COL = { id:0, status:1, site:2, title:5, planOwners:[11,12,13], planDue:14, wishDue:15, planReqDate:16,
-  designOwners:[19,20], designDue:21, designDoneDate:22, pubOwner:25, pubDoneDate:27,
+  designOwners:[20], designDue:21, designDoneDate:22, pubOwner:25, pubDoneDate:27, // U열만 디자인 담당자로 인정 (T열은 무시)
   opsOwner:30, finalReflectDate:31, regDate:33 };
 const MDPICK_DONE_STATUSES = new Set(['반영완료']);
 const MDPICK_HOLD_STATUS = '보류';
@@ -357,11 +357,9 @@ function processMDPickRow(row){
   const is2026 = (regDate && regDate.getFullYear()===2026) || (completedDate && completedDate.getFullYear()===2026);
   if(!(is2026 || !isDone)) return null; // scope filter (B안), ICT와 동일 기준
 
+  // 이 시트는 디자인 담당자에게만 일감을 할당 (기획/퍼블/운영 담당자는 집계 대상 아님)
   const stages = [
-    { name:'기획', owners: allNames(row, MDPICK_COL.planOwners), due: parseDate(row[MDPICK_COL.planDue]) || parseDate(row[MDPICK_COL.wishDue]) },
     { name:'디자인', owners: allNames(row, MDPICK_COL.designOwners), due: parseDate(row[MDPICK_COL.designDue]) },
-    { name:'퍼블리싱', owners: extractNames(row[MDPICK_COL.pubOwner]), due: null },
-    { name:'운영', owners: extractNames(row[MDPICK_COL.opsOwner]), due: parseDate(row[MDPICK_COL.finalReflectDate]) },
   ];
   let currentOwner='', currentDue=null, currentStage='';
   stages.forEach(s=>{ if(s.owners.length){ currentOwner=s.owners[0]; currentDue=s.due; currentStage=s.name; } });
