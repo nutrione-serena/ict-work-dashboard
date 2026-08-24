@@ -379,7 +379,7 @@ function processMDPickRow(row){
 
   return {
     id:'MDP-'+row[MDPICK_COL.id], docNo:'MDP-'+row[MDPICK_COL.id], status, service: MDPICK_SERVICE_MAP[row[MDPICK_COL.site]]||row[MDPICK_COL.site]||'미지정',
-    title:(row[MDPICK_COL.title]||'(제목없음)').trim(), dept:'', priority:'미지정',
+    title:(row[MDPICK_COL.title]||'(제목없음)').trim(), dept:'', priority:'최상', // 이 시트는 우선순위 컬럼이 없어 전부 최상으로 고정
     reqDate, regDate, scheduledDate:null, completedDate, currentOwner: currentOwner||'미배정', currentStage: currentStage||'-',
     currentDue: targetDue, overdue, isDone, uiStatus, startDate: reqDate || regDate, endDate,
     designOwners: designStage ? designStage.owners : [], allOwners, source:'mdpick'
