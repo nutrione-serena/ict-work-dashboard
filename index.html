@@ -16,6 +16,9 @@
   header{padding:20px 28px;background:linear-gradient(135deg,#1f2a44,#2b3a63);color:#fff;}
   header h1{margin:0;font-size:20px;}
   header p{margin:4px 0 0;font-size:13px;color:#c7d0e6;}
+  .header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .sheet-link-btn{flex:0 0 auto;padding:8px 16px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;}
+  .sheet-link-btn:hover{background:rgba(255,255,255,.22);}
   .wrap{padding:20px 28px 60px;max-width:1400px;margin:0 auto;}
   .toolbar{display:flex;flex-wrap:wrap;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:18px;align-items:center;}
   .toolbar label{font-size:12px;color:var(--sub);display:flex;flex-direction:column;gap:4px;}
@@ -83,8 +86,13 @@
 </head>
 <body>
 <header>
-  <h1>ICT 일감 처리 대시보드</h1>
-  <p>서비스기획팀 업무 요청 현황 · 2026년 등록/반영완료 건 + 연도무관 미완료 건 · 데이터: 구글 스프레드시트 3개 연동, 시트 수정 시 새로고침만으로 자동 반영</p>
+  <div class="header-top">
+    <div>
+      <h1>ICT 일감 처리 대시보드</h1>
+      <p>서비스기획팀 업무 요청 현황 · 2026년 등록/반영완료 건 + 연도무관 미완료 건 · 데이터: 구글 스프레드시트 3개 연동, 시트 수정 시 새로고침만으로 자동 반영</p>
+    </div>
+    <a class="sheet-link-btn" href="https://docs.google.com/spreadsheets/d/1JI9HOhB59awQaokV30_boAJsI5dG7nU38EvL1kL8prQ/edit?gid=1090751347#gid=1090751347" target="_blank" rel="noopener">원본시트보기 ↗</a>
+  </div>
 </header>
 <div class="wrap">
   <div class="toolbar" id="toolbar">
@@ -164,7 +172,8 @@ const SHEET_NAMES = {
   mdpick: '[엠디스픽] 상품 상세 제작 의뢰_20260824',
 };
 function sheetCsvUrl(sheetName){
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  // _=타임스탬프로 캐시버스팅 (구글 응답 자체는 no-cache지만, 브라우저/네트워크 캐시가 재사용하는 걸 방지)
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_=${Date.now()}`;
 }
 function displayName(n){ return n; } // 실명 그대로 표시
 
@@ -322,7 +331,8 @@ function processEventRow(row){
   let currentOwner='', currentDue=null, currentStage='';
   stages.forEach(s=>{ if(s.owners.length){ currentOwner=s.owners[0]; currentDue=s.due; currentStage=s.name; } });
 
-  const targetDue = currentDue;
+  // 예정일은 담당자 진행단계와 무관하게 디자인>퍼블>개발 완료요청일 우선순위로 결정
+  const targetDue = stages[0].due || stages[1].due || stages[2].due;
   const overdue = !isDone && targetDue && targetDue < TODAY;
   let uiStatus = '진행중';
   if(isDone) uiStatus = '완료';
@@ -373,7 +383,7 @@ function processMDPickRow(row){
   let currentOwner='', currentDue=null, currentStage='';
   stages.forEach(s=>{ if(s.owners.length){ currentOwner=s.owners[0]; currentDue=s.due; currentStage=s.name; } });
 
-  const targetDue = currentDue || parseDate(row[MDPICK_COL.wishDue]);
+  const targetDue = parseDate(row[MDPICK_COL.wishDue]) || currentDue; // 희망완료일을 예정일로 우선 사용
   const overdue = !isDone && targetDue && targetDue < TODAY;
   let uiStatus = '진행중';
   if(isDone) uiStatus = '완료';
