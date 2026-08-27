@@ -51,6 +51,7 @@
   .gantt-row{display:flex;align-items:center;height:30px;border-bottom:1px solid #f0f1f5;font-size:12px;}
   .gantt-label{width:280px;flex:0 0 280px;padding-right:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
   .gantt-track{position:relative;flex:1;height:18px;background:#f4f6fb;border-radius:4px;}
+  .gantt-duration{width:60px;flex:0 0 60px;text-align:right;font-size:11px;color:var(--sub);padding-left:6px;}
   .gantt-bar{position:absolute;height:18px;border-radius:4px;top:0;}
   .gantt-bar.done{background:var(--green);}
   .gantt-bar.ontrack{background:var(--blue);}
@@ -77,7 +78,7 @@
   .owner-item.ra{background:#eef4ff;border-radius:6px;margin:2px 0;padding-left:4px;}
   .statusbadge{flex:0 0 auto;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;white-space:nowrap;}
   .owner-empty{font-size:12px;color:var(--sub);padding:6px 0;}
-  .owner-list{max-height:138px;overflow-y:auto;padding-right:4px;}
+  .owner-list{max-height:276px;overflow-y:auto;padding-right:4px;}
 </style>
 </head>
 <body>
@@ -126,7 +127,7 @@
   <div class="panel">
     <h3>📊 업무별 간트 차트 <span>(기획중/테스트중/디자인중/개발중/퍼블중/반영요청 건만 · 동일 제목 업무는 1건으로 병합 · 시작일=작업요청일, 종료일=반영예정일→반영요청일 순)</span></h3>
     <div class="gantt-wrap">
-      <div class="gantt-header"><div class="gantt-label">업무명</div><div id="gantt-scale" style="flex:1;position:relative;"></div></div>
+      <div class="gantt-header"><div class="gantt-label">업무명</div><div id="gantt-scale" style="flex:1;position:relative;"></div><div class="gantt-duration">소요일</div></div>
       <div id="gantt-body" class="scroll" style="max-height:520px;"></div>
     </div>
     <div class="legend">
@@ -165,20 +166,7 @@ const SHEET_NAMES = {
 function sheetCsvUrl(sheetName){
   return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
 }
-// 웹 공개용 익명화: 화면에 표시될 때만 가명으로 치환 (필터링/매칭 로직은 원본 이름 기준 그대로 동작)
-const NAME_MAP = {
-  '김효선':'기획자A', '이윤경':'디자이너A', '정아인':'디자이너B', '홍윤선':'퍼블리셔A',
-  '김상민':'개발자A', '김연웅':'개발자B', '김승민':'개발자C',
-  '김홍집':'담당자D', '알렉스':'담당자E', '해나':'담당자F', '로스':'담당자G', '엘리':'담당자H',
-};
-let _autoNameSeq = 0;
-const _autoNameCache = {};
-function displayName(n){
-  if(!n) return n;
-  if(NAME_MAP[n]) return NAME_MAP[n];
-  if(!_autoNameCache[n]){ _autoNameSeq++; _autoNameCache[n] = '담당자#'+_autoNameSeq; }
-  return _autoNameCache[n];
-}
+function displayName(n){ return n; } // 실명 그대로 표시
 
 function extractName(v){
   if(!v) return '';
@@ -201,11 +189,27 @@ function parseDate(v){
   const d = new Date(s+'T00:00:00');
   return isNaN(d.getTime()) ? null : d;
 }
+function ymd(d){
+  // toISOString()은 UTC로 변환하면서 UTC+시간대(한국 등)에서 하루 밀리는 문제가 있어 로컬 날짜 그대로 포맷
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function fmt(d){
   if(!d) return '-';
-  return d.toISOString().slice(0,10);
+  return ymd(d);
 }
 function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+function businessDaysBetween(start,end){
+  // 토/일 제외, 시작일~종료일 양 끝 포함
+  let count = 0;
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endD = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while(cur <= endD){
+    const dow = cur.getDay();
+    if(dow!==0 && dow!==6) count++;
+    cur.setDate(cur.getDate()+1);
+  }
+  return count;
+}
 
 function lastNonBlank(row, idxList){
   // idxList: array across 4 groups, same field position -> return last non-empty across groups in order
@@ -254,7 +258,7 @@ function processRow(row){
   stages.forEach(s=>{ if(s.owners.length){ currentOwner=s.owners[0]; currentDue=s.due; currentStage=s.name; } });
 
   const scheduledDate = parseDate(row[COL.scheduledDate]);
-  const targetDue = currentDue || scheduledDate;
+  const targetDue = scheduledDate || currentDue; // 반영예정일이 있으면 최우선 (단계별 예정일보다 실제 마감 기준이 정확함)
   const overdue = !isDone && targetDue && targetDue < TODAY;
 
   let uiStatus = '진행중';
@@ -435,7 +439,7 @@ function render(){
     if(fStatus && t.uiStatus!==fStatus) return false;
     if(fPriority && t.priority!==fPriority) return false;
     if(fMonth){
-      const m = t.regDate ? t.regDate.toISOString().slice(0,7) : null;
+      const m = t.regDate ? ymd(t.regDate).slice(0,7) : null;
       if(m!==fMonth) return false;
     }
     return true;
@@ -639,11 +643,12 @@ function renderGantt(list){
         <div class="gantt-bar ${m.cls}" style="left:${left}%;width:${width}%;" title="${fmt(m.start)} ~ ${fmt(m.end)} · ${m.service}"></div>
         <div class="gantt-today" style="left:${todayPct}%;"></div>
       </div>
+      <div class="gantt-duration">${businessDaysBetween(m.start, m.end)}일</div>
     </div>`;
   }).join('');
 
   body.style.position = 'relative';
-  body.innerHTML = `<div style="position:absolute;left:280px;right:0;top:0;bottom:0;pointer-events:none;">${monthGridHtml}</div>` + rowsHtml;
+  body.innerHTML = `<div style="position:absolute;left:280px;right:60px;top:0;bottom:0;pointer-events:none;">${monthGridHtml}</div>` + rowsHtml;
   if(merged.length>maxRows){
     body.innerHTML += `<div class="empty">상위 ${maxRows}건만 표시 (전체 ${merged.length}건, 필터로 좁혀보세요)</div>`;
   }
@@ -683,7 +688,7 @@ function finishInit(){
         document.getElementById('f-owner').appendChild(opt);
       });
       populateSelect('f-priority', TASKS.map(t=>t.priority));
-      const months = TASKS.map(t=>t.regDate ? t.regDate.toISOString().slice(0,7) : null).filter(Boolean);
+      const months = TASKS.map(t=>t.regDate ? ymd(t.regDate).slice(0,7) : null).filter(Boolean);
       populateSelect('f-month', months);
 
       ['f-service','f-owner','f-status','f-priority','f-month'].forEach(id=>{
