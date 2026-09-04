@@ -267,7 +267,12 @@ function processRow(row){
   stages.forEach(s=>{ if(s.owners.length){ currentOwner=s.owners[0]; currentDue=s.due; currentStage=s.name; } });
 
   const scheduledDate = parseDate(row[COL.scheduledDate]);
-  const targetDue = scheduledDate || currentDue; // 반영예정일이 있으면 최우선 (단계별 예정일보다 실제 마감 기준이 정확함)
+  const devStage = stages.find(s=>s.name==='개발');
+  const devDue = devStage ? devStage.due : null;
+  // 반영예정일이 없고 개발 완료 예정일만 있으면, 개발 완료 후 반영까지의 여유(QA 등)를 감안해
+  // 개발 완료 예정일 + 7일을 반영예정일로 간주해서 지연 여부를 판단한다
+  const devDueBuffered = devDue ? new Date(devDue.getTime() + 7*86400000) : null;
+  const targetDue = scheduledDate || devDueBuffered || currentDue; // 반영예정일이 있으면 최우선 (단계별 예정일보다 실제 마감 기준이 정확함)
   const overdue = !isDone && targetDue && targetDue < TODAY;
 
   let uiStatus = '진행중';
@@ -405,9 +410,11 @@ function processMDPickRow(row){
 
 const OWNER_ROLE = { '김효선':'기획', '이윤경':'디자인', '정아인':'디자인', '홍윤선':'퍼블', '김상민':'개발', '김연웅':'개발', '김승민':'개발' };
 const ROLE_ACTIVE_STATUS = {
-  '기획': ['기획중','대기'],
-  '디자인': ['디자인중'],
-  '퍼블': ['퍼블중'],
+  // '테스트중'은 개발 담당만의 일이 아니라 관련된 기획/디자인/퍼블 담당자도 알아야 하는 상태라
+  // 모든 역할에 공통으로 포함시켜, 어느 담당자 카드에서 보든 파란색 '테스트 중' 배지가 뜨게 한다
+  '기획': ['기획중','대기','테스트중'],
+  '디자인': ['디자인중','테스트중'],
+  '퍼블': ['퍼블중','테스트중'],
   '개발': ['개발중','개발요청','테스트중','반영요청','버그수정'], // 우선순위 순서 (인덱스가 작을수록 상단)
 };
 const ROLE_EXCLUDE_STATUS = { '개발': ['상시운영수정'] };
