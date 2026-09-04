@@ -285,7 +285,7 @@ function processRow(row){
     title: (row[COL.title]||'(제목없음)').trim(), dept: row[COL.dept], priority: row[COL.priority]||'미지정',
     reqDate, regDate, scheduledDate, completedDate, currentOwner: currentOwner||'미배정', currentStage: currentStage||'-',
     currentDue: targetDue, overdue, isDone, uiStatus, startDate: reqDate || regDate, endDate,
-    designOwners: designStage ? designStage.owners : [], allOwners, source:'ict'
+    designOwners: designStage ? designStage.owners : [], designDue: designStage ? designStage.due : null, allOwners, source:'ict'
   };
 }
 
@@ -347,7 +347,7 @@ function processEventRow(row){
     title:(row[EVENT_COL.title]||'(제목없음)').trim(), dept:'', priority:'최상', // 이 시트는 우선순위 컬럼이 없어 전부 최상으로 고정
     reqDate, regDate, scheduledDate:null, completedDate, currentOwner: currentOwner||'미배정', currentStage: currentStage||'-',
     currentDue: targetDue, overdue, isDone, uiStatus, startDate: reqDate || regDate, endDate,
-    designOwners, allOwners, source:'event'
+    designOwners, designDue: stages[0].due, allOwners, source:'event'
   };
 }
 
@@ -399,7 +399,7 @@ function processMDPickRow(row){
     title:(row[MDPICK_COL.title]||'(제목없음)').trim(), dept:'', priority:'최상', // 이 시트는 우선순위 컬럼이 없어 전부 최상으로 고정
     reqDate, regDate, scheduledDate:null, completedDate, currentOwner: currentOwner||'미배정', currentStage: currentStage||'-',
     currentDue: targetDue, overdue, isDone, uiStatus, startDate: reqDate || regDate, endDate,
-    designOwners: designStage ? designStage.owners : [], allOwners, source:'mdpick'
+    designOwners: designStage ? designStage.owners : [], designDue: designStage ? designStage.due : null, allOwners, source:'mdpick'
   };
 }
 
@@ -416,6 +416,12 @@ function roleActiveRank(role, status){
   const arr = ROLE_ACTIVE_STATUS[role]||[];
   const idx = arr.indexOf(normStatus(status));
   return idx===-1 ? null : idx;
+}
+// '디자인검수' 상태여도 디자인 완료 예정일이 아직 도래하지 않았으면(오늘 기준 미래) 디자인중으로 간주해서 표기한다
+function effectiveRoleStatus(role, t){
+  const raw = (t.status||'').trim();
+  if(role==='디자인' && normStatus(raw)==='디자인검수' && t.designDue && t.designDue >= TODAY) return '디자인중';
+  return raw;
 }
 
 function ownerMatches(t, owner){
@@ -469,7 +475,7 @@ function renderOwnerProgress(list){
     const role = OWNER_ROLE[owner];
     const excludeSet = new Set(ROLE_EXCLUDE_STATUS[role]||[]);
     const items = active.filter(t=>ownerMatches(t, owner) && !excludeSet.has(normStatus(t.status))).sort((a,b)=>{
-      const aRank = roleActiveRank(role, a.status), bRank = roleActiveRank(role, b.status);
+      const aRank = roleActiveRank(role, effectiveRoleStatus(role,a)), bRank = roleActiveRank(role, effectiveRoleStatus(role,b));
       const aTier = aRank===null ? 1 : 0, bTier = bRank===null ? 1 : 0;
       if(aTier!==bTier) return aTier-bTier;
       if(aTier===0 && aRank!==bRank) return aRank-bRank;
@@ -478,14 +484,15 @@ function renderOwnerProgress(list){
       return (a.currentDue?a.currentDue.getTime():Infinity) - (b.currentDue?b.currentDue.getTime():Infinity);
     });
     const odCount = items.filter(t=>t.overdue).length;
-    const roleActiveCount = items.filter(t=>roleActiveRank(role, t.status)!==null).length;
+    const roleActiveCount = items.filter(t=>roleActiveRank(role, effectiveRoleStatus(role,t))!==null).length;
     const body = items.length
       ? items.map(t=>{
           const dueTxt = t.currentDue ? (t.overdue ? `D+${daysBetween(t.currentDue,TODAY)}` : `D-${Math.max(0,daysBetween(TODAY,t.currentDue))}`) : '-';
-          const isRoleActive = roleActiveRank(role, t.status)!==null;
+          const effStatus = effectiveRoleStatus(role,t);
+          const isRoleActive = roleActiveRank(role, effStatus)!==null;
           return `<div class="owner-item ${t.overdue?'od':''} ${isRoleActive?'ra':''}">
             <span class="chk">${t.overdue?'⚠️':'☐'}</span>
-            ${isRoleActive ? `<span class="statusbadge">${t.status.trim()}</span>` : ''}
+            ${isRoleActive ? `<span class="statusbadge">${effStatus}</span>` : ''}
             <span class="txt" title="${t.title}">[${t.priority}] ${t.title}</span>
             <span class="due">${dueTxt}</span>
           </div>`;
